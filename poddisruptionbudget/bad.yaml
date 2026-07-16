@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-example-app-pdb
+  namespace: test-app 
+spec:
+  maxUnavailable: 0 # <-- Violates our Rule
+  selector:
+    matchLabels:
+      app: example

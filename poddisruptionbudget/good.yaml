@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-example-app-pdb
+  namespace: test-app
+spec:
+  # Valid with replicas: 2 — allows 1 disruption, keeps at least 1 pod
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: example

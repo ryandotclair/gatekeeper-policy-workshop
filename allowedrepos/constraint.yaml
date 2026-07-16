@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: wrong-container-image-repo
+spec:
+  enforcementAction: deny # default is deny. Other options are: warn, dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaceSelector:
+      matchLabels:
+        policy.gatekeeper.workshop/enforce: "true"
+  parameters:
+    repos:
+      - "openpolicyagent/" # <-- Update

@@ -1,0 +1,29 @@
+# Required for ConstraintTemplates that read data.inventory.
+# Must be named "config". If a Config already exists, merge these syncOnly
+# entries into it instead of replacing.
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: Config
+metadata:
+  name: config
+  namespace: nkp-flux-provisioned-phvwv-jjxpb # <-- Use NKP's Workspace namespace
+spec:
+  sync:
+    syncOnly:
+      - group: "policy"
+        version: "v1"
+        kind: "PodDisruptionBudget"
+      - group: "apps"
+        version: "v1"
+        kind: "Deployment"
+      - group: "apps"
+        version: "v1"
+        kind: "StatefulSet"
+      - group: "apps"
+        version: "v1"
+        kind: "ReplicaSet"
+      - group: ""
+        version: "v1"
+        kind: "ReplicationController"
+      - group: ""
+        version: "v1"
+        kind: "Pod"

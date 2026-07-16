@@ -1,0 +1,17 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPodDisruptionBudget
+metadata:
+  name: pod-distruption-budget
+spec:
+  enforcementAction: deny # default is deny. Other options are: warn, dryrun
+  match:
+    namespaceSelector:
+      matchLabels:
+        policy.gatekeeper.workshop/enforce: "true"
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "ReplicaSet"]
+      - apiGroups: ["policy"]
+        kinds: ["PodDisruptionBudget"]
+      - apiGroups: [""]
+        kinds: ["ReplicationController"]

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: admin-policies
+resources:
+  - ./allowedrepos/constraint.yaml
+  - ./allowedrepos/template.yaml
+  - ./disallowedtags/constraint.yaml
+  - ./disallowedtags/template.yaml
+  - ./poddisruptionbudget/constraint.yaml
+  - ./poddisruptionbudget/template.yaml
+  - ./requiredlabels/constraint.yaml
+  - ./requiredlabels/template.yaml

@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDisallowedTags
+metadata:
+  name: container-image-must-not-have-latest-tag
+spec:
+  enforcementAction: deny # default is deny. Other options are: warn, dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaceSelector:
+      matchLabels:
+        policy.gatekeeper.workshop/enforce: "true"
+  parameters:
+    tags: ["latest"]
+    exemptImages: ["openpolicyagent/opa-exp:latest", "openpolicyagent/opa-exp2:latest"]

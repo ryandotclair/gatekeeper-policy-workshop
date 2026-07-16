@@ -1,0 +1,257 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8spoddisruptionbudget
+  annotations:
+    metadata.gatekeeper.sh/title: "Pod Disruption Budget"
+    metadata.gatekeeper.sh/version: 1.3.9
+    metadata.gatekeeper.sh/requires-sync-data: |
+      "[
+        [
+          {
+            \"groups\": [\"policy\"],
+            \"versions\": [\"v1\"],
+            \"kinds\": [\"PodDisruptionBudget\"]
+          },
+          {
+            \"groups\": [\"apps\"],
+            \"versions\": [\"v1\"],
+            \"kinds\": [\"Deployment\", \"StatefulSet\"]
+          },
+          {
+            \"groups\": [\"\"],
+            \"versions\": [\"v1\"],
+            \"kinds\": [\"ReplicationController\", \"Pod\"]
+          }
+        ]
+      ]"
+    description: >-
+      Enforces that replica-based workloads MUST have a matching PodDisruptionBudget,
+      run at least 2 replicas, and configure the PDB so voluntary disruptions can
+      proceed during node drains / cluster upgrades WITHOUT taking down every pod.
+      Also blocks deleting a PDB while matching workloads/pods still exist.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPodDisruptionBudget
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8spoddisruptionbudget
+
+        # V1: maxUnavailable of 0 / 0%
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation != "DELETE"
+          pdb := input.review.object
+          object.get(pdb.spec, "maxUnavailable", null) != null
+          effective_budget_value(1, pdb.spec.maxUnavailable) < 1
+          msg := sprintf(
+            "PodDisruptionBudget <%v> has maxUnavailable of <%v>, which allows 0 voluntary disruptions and will block node drains / cluster upgrades",
+            [pdb.metadata.name, pdb.spec.maxUnavailable],
+          )
+        }
+
+        # V2: both minAvailable and maxUnavailable set
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation != "DELETE"
+          pdb := input.review.object
+          object.get(pdb.spec, "minAvailable", null) != null
+          object.get(pdb.spec, "maxUnavailable", null) != null
+          msg := sprintf(
+            "PodDisruptionBudget <%v> must not set both minAvailable and maxUnavailable; specify only one",
+            [pdb.metadata.name],
+          )
+        }
+
+        # V3: PDB unsafe vs matching workload replica count
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation != "DELETE"
+          pdb := input.review.object
+          replicas := replica_count(pdb)
+          not safe_disruption_budget(pdb, replicas)
+          msg := sprintf(
+            "PodDisruptionBudget <%v> (minAvailable=<%v>, maxUnavailable=<%v>) is unsafe for %v matching replica(s). Require replicas >= 2 and 1 <= disruptionsAllowed <= replicas-1 so drains can proceed without taking down every pod.",
+            [pdb.metadata.name, object.get(pdb.spec, "minAvailable", "unset"), object.get(pdb.spec, "maxUnavailable", "unset"), replicas],
+          )
+        }
+
+        # V4: UPDATE changes selector and orphans a workload
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation == "UPDATE"
+          new_pdb := input.review.object
+          old_pdb := input.review.oldObject
+          workload := matched_workload(old_pdb)[_]
+          not pdb_covers_workload(new_pdb, workload)
+          count(matched_pdbs_except(workload, new_pdb.metadata.name)) == 0
+          msg := sprintf(
+            "PodDisruptionBudget <%v> update would leave %v <%v> without a matching PodDisruptionBudget (selector no longer covers the workload)",
+            [new_pdb.metadata.name, workload.kind, workload.metadata.name],
+          )
+        }
+
+        # V5a: DELETE blocked while matching workload exists
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation == "DELETE"
+          pdb := input.review.oldObject
+          workload := matched_workload(pdb)[_]
+          count(matched_pdbs_except(workload, pdb.metadata.name)) == 0
+          msg := sprintf(
+            "PodDisruptionBudget <%v> cannot be deleted while %v <%v> still matches its selector; delete or retarget the workload first (or add another covering PDB)",
+            [pdb.metadata.name, workload.kind, workload.metadata.name],
+          )
+        }
+
+        # V5b: DELETE blocked while matching pods exist (no workload in inventory)
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation == "DELETE"
+          pdb := input.review.oldObject
+          count(matched_workload(pdb)) == 0
+          n := matching_pod_count(pdb)
+          n > 0
+          msg := sprintf(
+            "PodDisruptionBudget <%v> cannot be deleted while %v matching Pod(s) still exist; delete those pods first (or add another covering PDB)",
+            [pdb.metadata.name, n],
+          )
+        }
+
+        # V6: minAvailable 100%
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.operation != "DELETE"
+          pdb := input.review.object
+          object.get(pdb.spec, "minAvailable", null) != null
+          is_string(pdb.spec.minAvailable)
+          endswith(pdb.spec.minAvailable, "%")
+          to_number(trim_suffix(pdb.spec.minAvailable, "%")) >= 100
+          msg := sprintf(
+            "PodDisruptionBudget <%v> has minAvailable of <%v>, which requires all pods to stay available and will block node drains / cluster upgrades",
+            [pdb.metadata.name, pdb.spec.minAvailable],
+          )
+        }
+
+        # V7: workload missing matching PDB
+        violation[{"msg": msg}] {
+          is_workload(input.review.kind.kind)
+          obj := input.review.object
+          count(matched_pdbs(obj)) == 0
+          msg := sprintf(
+            "%v <%v> is missing a mandatory PodDisruptionBudget. You must deploy a PDB with matching selector labels in namespace <%v>.",
+            [obj.kind, obj.metadata.name, obj.metadata.namespace],
+          )
+        }
+
+        # V8: workload has fewer than 2 replicas
+        violation[{"msg": msg}] {
+          is_workload(input.review.kind.kind)
+          obj := input.review.object
+          object.get(obj.spec, "replicas", 1) < 2
+          msg := sprintf(
+            "%v <%v> has %v replica(s); at least 2 replicas are required so a PodDisruptionBudget can allow node drains / cluster upgrades without taking down every pod",
+            [obj.kind, obj.metadata.name, object.get(obj.spec, "replicas", 1)],
+          )
+        }
+
+        # V9: workload covered by an unsafe PDB
+        violation[{"msg": msg}] {
+          is_workload(input.review.kind.kind)
+          obj := input.review.object
+          pdb := matched_pdbs(obj)[_]
+          not safe_disruption_budget(pdb, object.get(obj.spec, "replicas", 1))
+          msg := sprintf(
+            "%v <%v> (%v replica(s)) is selected by PodDisruptionBudget <%v> (minAvailable=<%v>, maxUnavailable=<%v>). Require 1 <= disruptionsAllowed <= replicas-1 so drains can proceed without taking down every pod.",
+            [obj.kind, obj.metadata.name, object.get(obj.spec, "replicas", 1), pdb.metadata.name, object.get(pdb.spec, "minAvailable", "unset"), object.get(pdb.spec, "maxUnavailable", "unset")],
+          )
+        }
+
+        is_workload(kind) {
+          {"Deployment", "StatefulSet", "ReplicaSet", "ReplicationController"}[kind]
+        }
+
+        # Returns an array so callers can use count()/[_] without multi-output functions.
+        # Exclude ReplicaSet: Deployment + its RS share labels and would double-count.
+        matched_workload(pdb) = workloads {
+          workloads := array.concat(
+            array.concat(
+              [w | w := data.inventory.namespace[pdb.metadata.namespace]["apps/v1"]["Deployment"][_]; pdb_covers_workload(pdb, w)],
+              [w | w := data.inventory.namespace[pdb.metadata.namespace]["apps/v1"]["StatefulSet"][_]; pdb_covers_workload(pdb, w)],
+            ),
+            [w | w := data.inventory.namespace[pdb.metadata.namespace]["v1"]["ReplicationController"][_]; pdb_covers_workload(pdb, w)],
+          )
+        }
+
+        matched_pdbs(obj) = pdbs {
+          pdbs := [p |
+            p := data.inventory.namespace[obj.metadata.namespace]["policy/v1"].PodDisruptionBudget[_]
+            pdb_covers_workload(p, obj)
+          ]
+        }
+
+        matched_pdbs_except(obj, exclude_name) = pdbs {
+          pdbs := [p |
+            p := matched_pdbs(obj)[_]
+            p.metadata.name != exclude_name
+          ]
+        }
+
+        pdb_covers_workload(pdb, obj) {
+          match_labels := { [k, v] | some k; v := pdb.spec.selector.matchLabels[k] }
+          count(match_labels) > 0
+          obj_labels := { [k, v] | some k; v := obj.spec.template.metadata.labels[k] }
+          count(match_labels - obj_labels) == 0
+        }
+
+        matching_pod_count(pdb) = n {
+          pods := [p |
+            p := data.inventory.namespace[pdb.metadata.namespace]["v1"]["Pod"][_]
+            match_labels := { [k, v] | some k; v := pdb.spec.selector.matchLabels[k] }
+            count(match_labels) > 0
+            pod_labels := { [k, v] | some k; v := p.metadata.labels[k] }
+            count(match_labels - pod_labels) == 0
+          ]
+          n := count(pods)
+        }
+
+        replica_count(pdb) = n {
+          counts := [c | c := object.get(matched_workload(pdb)[_].spec, "replicas", 1)]
+          count(counts) > 0
+          n := max(counts)
+        } else = n {
+          n := matching_pod_count(pdb)
+          n > 0
+        }
+
+        safe_disruption_budget(pdb, replicas) {
+          replicas >= 2
+          object.get(pdb.spec, "minAvailable", null) == null
+          object.get(pdb.spec, "maxUnavailable", null) != null
+          d := effective_budget_value(replicas, pdb.spec.maxUnavailable)
+          d >= 1
+          d < replicas
+        } else {
+          replicas >= 2
+          object.get(pdb.spec, "maxUnavailable", null) == null
+          object.get(pdb.spec, "minAvailable", null) != null
+          d := replicas - effective_budget_value(replicas, pdb.spec.minAvailable)
+          d >= 1
+          d < replicas
+        }
+
+        effective_budget_value(replicas, value) = value {
+          is_number(value)
+        } else = n {
+          is_string(value)
+          not endswith(value, "%")
+          n := to_number(value)
+        } else = n {
+          is_string(value)
+          endswith(value, "%")
+          percent := to_number(trim_suffix(value, "%"))
+          n := floor((replicas * percent + 99) / 100)
+        }

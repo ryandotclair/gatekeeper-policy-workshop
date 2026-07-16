@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-example-app-pdb
+  namespace: test-app
+spec:
+  # Unsafe with replicas: 2. When minAvailable >= replicas (ex: 2 = 2), it allows 0 disruptions
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: example
