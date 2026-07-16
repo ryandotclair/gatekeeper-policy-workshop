@@ -30,13 +30,13 @@ git clone https://github.com/ryandotclair/gatekeeper-policy-workshop.git
 cd gatekeeper-policy-workshop
 ```
 
-Let's create a specific namespace for our tests.  is the namespace assumed throughout this workshop. If you happen to require a different namespace, you'll have to modify the example app (and this guides instructions).
+Let's create a specific namespace for our tests. If you happen to require a different namespace, you'll have to modify the example app (and this guides instructions).
 
 ```bash
 kubectl create ns test-app
 ```
 
-Every policy that we will be using, assumes a label of `policy.gatekeeper.workshop/enforce=true`
+Every policy that we will be using, will target any namespce with the label of `policy.gatekeeper.workshop/enforce=true`
 
 First, ensure you have no namespaces that use that label. If you do, you'll need to modify that namespaceSelector.matchLabels value for every `constraint.yaml` file in this repo.
 
