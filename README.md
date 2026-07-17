@@ -19,6 +19,7 @@ The use-cases this covers:
 - NKP Management and at least one Workload Cluster has been installed
 - `kubectl` access to the Workload Cluster
 - `git` installed
+- `podman` installed
 - Internet Access
 
 # Example App
