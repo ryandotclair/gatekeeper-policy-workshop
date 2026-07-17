@@ -478,7 +478,7 @@ A common use-case is ensuring all namespaces have an owner label (or owner annot
 As you'll note in the `requiredlabels/constraint.yaml` file, not only are we looking for the owner label, but also a specific shape (ex: ryan.company.local)
 
 ```yaml
-labels:
+    labels:
       - key: owner
         allowedRegex: "^[a-zA-Z]+.company.local$"
 ```
