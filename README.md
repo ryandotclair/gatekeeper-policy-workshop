@@ -235,9 +235,13 @@ To make this compliant, let's get that pod under Harbor's management.
 First retag this image and push it to your Harbor instance
 
 ```bash
+echo "Pulling..."
 podman pull --platform linux/amd64 nginx:latest 
+echo "Tagging..."
 podman tag docker.io/library/nginx ${HARBOR_LOCATION}/${PROJECT}/nginx
+echo "Pushing..."
 podman push ${HARBOR_LOCATION}/${PROJECT}/nginx --tls-verify=false
+echo "Done"
 ```
 
 Then modify the `example-app.yaml` to reference `${HARBOR_LOCATION}/${PROJECT}/nginx:latest`, where the $ values are your values. For mine it's `10.1.2.3:5000/demo/nginx:latest`
