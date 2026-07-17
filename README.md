@@ -151,8 +151,9 @@ spec:
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
-    namespaces:
-      - "test-app"
+    namespaceSelector:
+          matchLabels:
+            policy.gatekeeper.workshop/enforce: "true"
   parameters:
     repos:
       - "openpolicyagent/" # <-- This
@@ -170,8 +171,9 @@ spec:
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
-    namespaces:
-      - "test-app"
+    namespaceSelector:
+          matchLabels:
+            policy.gatekeeper.workshop/enforce: "true"
   parameters:
     repos:
       - "10.1.2.3:5000/"
