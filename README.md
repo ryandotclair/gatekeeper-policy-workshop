@@ -490,7 +490,7 @@ kubectl apply -f requiredlabels/constraint.yaml
 ```
 
 ## Test
-Given this is a workshop, and we've narrowed the policy down to a given namespace label, we'll require passing in that label for Gatekeeper to act on it. Let's try a failure scenario to see what happens:
+Given this is a workshop, and we've narrowed the policy enforcement based on a given namespace label, we'll require passing in that label for Gatekeeper to act on it. Let's try a failure scenario to see what happens:
 ```bash
 kubectl apply -f - <<'EOF'
 apiVersion: v1
@@ -554,6 +554,8 @@ spec:
         - key: policy.gatekeeper.workshop/skip
           operator: DoesNotExist
 ```
+
+Now you can always know who to reach out to when there's an issue. This policy is especially handy when Platform Teams give direct kubernetes access to dev teams. Having a clearly defined owner for every namespace, ideally at the team or email distribution list level (in case an individual moves on) allows the Platform team to always know who to reach out to when needed. This can also help other downstream systems that might benefit from this like chargeback, observability dashboards, oncall, etc. 
 
 # Automate All The Things!
 OK, so we've successfully tested each policy individually, now let's roll this out to a whole fleet of Kubernetes clusters. 
