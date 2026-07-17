@@ -1,6 +1,6 @@
 # Overview
 
-In this short tutorial, we'll cover how to set Kubernetes policies across your clusters using a few common use-cases examples. You'll see a before and after of setting the policy, using an example application in a targeted namespace, proving that the policy works. Optionally, this guide will show you how to apply the policies across multiple clusters automatically, using NKP's Project concept.
+In this short tutorial, we'll cover how to set Kubernetes policies across your clusters using a few common use-cases examples. You'll see a before and after of setting the policy, using an example application in a targeted namespace, proving that the policy works. 
 
 The use-cases this covers:
 
@@ -183,8 +183,6 @@ spec:
 Note: If we did NOT specify the namespace(s) match, it would apply to all namespaces in the cluster.
 
 ## Test
-
-Let's "manually" test this for now. Later we will flux our way to automating all the things. 
 
 Apply the admission controller policy, and then the policy that will use said controller:
 
@@ -557,26 +555,9 @@ spec:
 
 Now you can always know who to reach out to when there's an issue. This policy is especially handy when Platform Teams give direct kubernetes access to dev teams. Having a clearly defined owner for every namespace, ideally at the team or email distribution list level (in case an individual moves on) allows the Platform team to always know who to reach out to when needed. This can also help other downstream systems that might benefit from this like chargeback, observability dashboards, oncall, etc. 
 
-# Automate All The Things!
-OK, so we've successfully tested each policy individually, now let's roll this out to a whole fleet of Kubernetes clusters. 
-
-We can do this by using the NKP Project concept. 
-
-Create a new NKP Project, I'll call mine "admin-policies", and I'll also override the namespace to match that.
-
-Note: You can further automate this by dynamically applying this Project to any Kubernetes cluster that has been given a label (example: `environment=production`), which opens up interesting use-cases.
-
-Next you'll want to fork my repository, update (or just copy over all your constraint files over) it, git/push those changes, and then reference your github repo in your Project's Continuous Deployment tab. We leverage FluxCD, which will pick up the `kustomization.yaml` file and apply each of those policies that it references (you can comment the lines you don't want to apply) to any cluster the Project lives on. And in this case, it will act on any namespace with the `policy.gatekeeper.workshop/enforce: "true"` label.
-
-(▀̿Ĺ̯▀̿ ̿)
-
-So cool.
-
 # Clean Up
 
-If you did the GitOps method, you'll just need to delete the GitOps source, and it will clean everything up from all the clusters it was deployed on. 
-
-For the manual method, a simple way to clean it all up is using the -R flag. First make sure it deletes everything you'd expect
+A simple way to clean it all up is using the -R flag. But first make sure it deletes everything you'd expect!
 ```bash
 cd ..
 kubectl delete -f ./gatekeeper-policy-workshop -R --dry-run=client
