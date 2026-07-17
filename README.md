@@ -469,6 +469,9 @@ You should see this:
 Error from server (Forbidden): error when creating "poddisruptionbudget/bad3.yaml": admission webhook "validation.gatekeeper.sh" denied the request: [pod-distruption-budget] PodDisruptionBudget <my-example-app-pdb> (minAvailable=<2>, maxUnavailable=<unset>) is unsafe for 2 matching replica(s). Require replicas >= 2 and 1 <= disruptionsAllowed <= replicas-1 so drains can proceed without taking down every pod.
 ```
 
+Awesome sauce. So we now are protecting our app teams from doing something they'll regret later. This really leans into the concept of shared responsibilty model, and what I like to call "social contracts". I'm a big fan of setting the expectation up front that at any moment in time, a Worker Node can go away and be replaced. If you haven't designed the app to handle that scenario and have the right resilency settings in place, then everyone suffers. 
+
+
 # Use-case 4: Required Labels
 A common use-case is ensuring all namespaces have an owner label (or owner annotation). In this case we're going to use the label method. This helps with tracking who owns what, and while you could do this at the deployment level, generally namespace level is enough.
 
